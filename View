@@ -1,0 +1,848 @@
+-- ZAINL HUB v2.1 - OFFICIAL
+-- GitHub: aoke5283-art/ZainlHub - File: View.lua
+-- RAW: https://raw.githubusercontent.com/aoke5283-art/ZainlHub/main/View.lua
+
+local ZainlHub = {}
+local Players = game:GetService("Players")
+local plr = Players.LocalPlayer
+local EggsFolder = workspace:FindFirstChild("Eggs") or workspace
+local RS = game:GetService("ReplicatedStorage")
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+-- ============================================================
+-- RARITY DATABASE (FOREST → DEMONS & ANGELS)
+-- ============================================================
+local RARITY_DB = {
+    Forest = {
+        Common = {"Chicken", "Dog"},
+        Uncommon = {"Bird"},
+        Rare = {"Owl", "Raccoon"},
+        Epic = {"Fox", "Bear"},
+        Legendary = {"Brr Brr Patapim"}
+    },
+    Lake = {
+        Common = {"Frog", "Duckling"},
+        Uncommon = {"Catfish"},
+        Rare = {"Turtle"},
+        Epic = {"Trulimero Trulicina", "Swan"},
+        Legendary = {"Axolotl"},
+        Cosmic = {"Leviathan"}
+    },
+    Desert = {
+        Common = {"Jerboa"},
+        Uncommon = {"Fennec"},
+        Rare = {"Camel"},
+        Epic = {"Tob Tobi Tob Tob", "Snake"},
+        Mythic = {"Scorpion", "Sand Spider"},
+        Cosmic = {"Royal Sphinx"}
+    },
+    Jungle = {
+        Rare = {"Chimpanzee", "Toucan"},
+        Epic = {"Crocodile"},
+        Legendary = {"Gorilla", "Orangutini Ananassini"},
+        Mythic = {"Spider", "Tiger"},
+        Secret = {"King Snake"}
+    },
+    Snow = {
+        Rare = {"Penguin"},
+        Epic = {"Walrus"},
+        Legendary = {"Polar Bear"},
+        Mythic = {"Sabertooth Tiger", "Mammoth"},
+        Cosmic = {"King Mammoth"},
+        Secret = {"Yeti"},
+        Eternal = {"Ice Dragon"}
+    },
+    Volcano = {
+        Epic = {"Lava Frog"},
+        Legendary = {"Flaming Bull", "Lava Iguana"},
+        Mythic = {"Chillin Chilli"},
+        Secret = {"Cerberus"},
+        Eternal = {"Phoenix", "Lava Dragon"}
+    },
+    AbyssOcean = {
+        Rare = {"Parrotfish"},
+        Epic = {"Swordfish"},
+        Legendary = {"Shark"},
+        Mythic = {"Orca"},
+        Cosmic = {"Whale Shark", "Beluga Whale"},
+        Secret = {"Kraken"},
+        Eternal = {"El Maja"}
+    },
+    Prehistoric = {
+        Rare = {"Dodo"},
+        Legendary = {"Pterodactyl"},
+        Mythic = {"Ankylosaurus"},
+        Cosmic = {"Triceratops", "Bronto"},
+        Secret = {"T-Rex", "Tralaledon"},
+        Eternal = {"Mosasaurus"}
+    },
+    Cosmic = {
+        Epic = {"Centapede"},
+        Legendary = {"Cosmic Gecko"},
+        Mythic = {"Cosmic Gorilla"},
+        Cosmic = {"La Vacca Saturno Saturnita"},
+        Secret = {"Cosmic Dragon", "Cosmic Skeleton Boss"},
+        Eternal = {"Eternal Lunar Dragon"},
+        Divine = {"Unicorn"}
+    },
+    DemonsAngels = {
+        Angel = {
+            Legendary = {"Light Dove"},
+            Mythic = {"Winged Lamb"},
+            Cosmic = {"Sacred Moth", "Holy Peacock"},
+            Secret = {"Pure Jellyfish", "Centaur"},
+            Eternal = {"Pegasus"},
+            Divine = {"ArchAngel"}
+        },
+        Demon = {
+            Legendary = {"Flame Sprite"},
+            Mythic = {"Toro"},
+            Cosmic = {"Demon Hound", "Imp"},
+            Secret = {"Gargoyle", "RazorFang"},
+            Eternal = {"Skeleton Horse"},
+            Divine = {"World Burner"}
+        },
+        Fusion = {
+            Equinox = {"Pegasus", "Skeleton Horse"},
+            Aetheron = {"ArchAngel", "World Burner"}
+        }
+    }
+}
+
+-- Urutan rarity dari terendah ke tertinggi
+local RARITY_ORDER = {
+    "Common", "Uncommon", "Rare", "Epic", "Legendary",
+    "Mythic", "Cosmic", "Secret", "Eternal", "Divine"
+}
+
+-- Fungsi bantu: cek rarity berdasarkan nama pet
+local function getRarityFromPet(petName)
+    for biome, rarities in pairs(RARITY_DB) do
+        if biome == "DemonsAngels" then
+            for side, sides in pairs(rarities) do
+                for rarity, pets in pairs(sides) do
+                    for _, name in ipairs(pets) do
+                        if string.lower(name) == string.lower(petName) then
+                            return rarity, biome, side
+                        end
+                    end
+                end
+            end
+        else
+            for rarity, pets in pairs(rarities) do
+                for _, name in ipairs(pets) do
+                    if string.lower(name) == string.lower(petName) then
+                        return rarity, biome, nil
+                    end
+                end
+            end
+        end
+    end
+    return "Common", "Unknown", nil
+end
+
+-- Fungsi bantu: dapetin index rarity (buat prioritas)
+local function getRarityIndex(rarity)
+    for i, r in ipairs(RARITY_ORDER) do
+        if string.lower(r) == string.lower(rarity) then
+            return i
+        end
+    end
+    return 1
+end
+
+-- ============================================================
+-- CONFIG ZAINL HUB
+-- ============================================================
+local Config = {
+    MinValue = 5000,
+    MinSize = 2.0,
+    TargetRarity = {"Secret", "Eternal", "Divine"},
+    TargetMutation = {"Gold", "Rainbow", "Diamond", "Celestial"},
+    
+    ESPEnabled = false,
+    ESPShowDistance = true,
+    ESPShowValue = true,
+    ESPShowSize = true,
+    ESPShowMutation = true,
+    ESPShowRarity = true,
+    AutoSteal = false,
+    AutoStealInterval = 2,
+    
+    PrioritizeSecret = true,
+    PrioritizeHighValue = true,
+    PrioritizeRarity = true,
+    
+    WebhookURL = "",
+    WebhookEnabled = false,
+    WebhookMinValue = 10000,
+    
+    TotalStolen = 0,
+    TotalValue = 0,
+    SessionStart = os.time()
+}
+
+-- ============================================================
+-- UI CREATION (RINGKAS, FOKUS FITUR)
+-- ============================================================
+function ZainlHub:CreateUI()
+    local oldGui = plr.PlayerGui:FindFirstChild("ZainlHub")
+    if oldGui then oldGui:Destroy() end
+    
+    local gui = Instance.new("ScreenGui", plr.PlayerGui)
+    gui.Name = "ZainlHub"
+    gui.ResetOnSpawn = false
+    
+    local main = Instance.new("Frame", gui)
+    main.Size = UDim2.new(0, 900, 0, 520)
+    main.Position = UDim2.new(0.5, -450, 0.5, -260)
+    main.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    main.BorderSizePixel = 0
+    Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
+    
+    -- Draggable
+    local dragging, dragStart, startPos
+    main.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = main.Position
+        end
+    end)
+    main.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+    
+    -- Top bar
+    local top = Instance.new("Frame", main)
+    top.Size = UDim2.new(1, 0, 0, 45)
+    top.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+    Instance.new("UICorner", top).CornerRadius = UDim.new(0, 12)
+    
+    local logo = Instance.new("TextLabel", top)
+    logo.Text = "  ◈ ZAINL HUB v2.1"
+    logo.Size = UDim2.new(0, 400, 1, 0)
+    logo.TextColor3 = Color3.fromRGB(255, 80, 150)
+    logo.BackgroundTransparency = 1
+    logo.Font = Enum.Font.GothamBold
+    logo.TextSize = 18
+    logo.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local closeBtn = Instance.new("TextButton", top)
+    closeBtn.Text = "✕"
+    closeBtn.Size = UDim2.new(0, 40, 0, 40)
+    closeBtn.Position = UDim2.new(1, -45, 0, 2)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+    closeBtn.TextColor3 = Color3.new(1, 1, 1)
+    closeBtn.Font = Enum.Font.GothamBold
+    Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 8)
+    closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
+    
+    -- Sidebar
+    local sidebar = Instance.new("Frame", main)
+    sidebar.Size = UDim2.new(0, 170, 1, -45)
+    sidebar.Position = UDim2.new(0, 0, 0, 45)
+    sidebar.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    Instance.new("UICorner", sidebar).CornerRadius = UDim.new(0, 12)
+    
+    local menus = {"Dashboard", "Eggs", "Filters", "Rarity", "Webhook", "About"}
+    local contentArea = Instance.new("Frame", main)
+    contentArea.Size = UDim2.new(1, -180, 1, -55)
+    contentArea.Position = UDim2.new(0, 175, 0, 50)
+    contentArea.BackgroundTransparency = 1
+    
+    local pages = {}
+    local activePage = "Dashboard"
+    
+    local function createPage(name)
+        local page = Instance.new("Frame", contentArea)
+        page.Name = name
+        page.Size = UDim2.new(1, 0, 1, 0)
+        page.BackgroundTransparency = 1
+        page.Visible = (name == activePage)
+        pages[name] = page
+        return page
+    end
+    
+    -- Dashboard
+    local dashPage = createPage("Dashboard")
+    local dashTitle = Instance.new("TextLabel", dashPage)
+    dashTitle.Text = "📊 Dashboard"
+    dashTitle.Size = UDim2.new(1, 0, 0, 35)
+    dashTitle.BackgroundTransparency = 1
+    dashTitle.TextColor3 = Color3.new(1, 1, 1)
+    dashTitle.Font = Enum.Font.GothamBold
+    dashTitle.TextSize = 20
+    dashTitle.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local statFrame = Instance.new("Frame", dashPage)
+    statFrame.Size = UDim2.new(1, 0, 0, 80)
+    statFrame.Position = UDim2.new(0, 0, 0, 45)
+    statFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    Instance.new("UICorner", statFrame).CornerRadius = UDim.new(0, 10)
+    
+    local stolenLabel = Instance.new("TextLabel", statFrame)
+    stolenLabel.Text = "🥚 Stolen: 0"
+    stolenLabel.Size = UDim2.new(0.33, 0, 1, 0)
+    stolenLabel.BackgroundTransparency = 1
+    stolenLabel.TextColor3 = Color3.fromRGB(255, 80, 150)
+    stolenLabel.Font = Enum.Font.GothamBold
+    stolenLabel.TextSize = 16
+    
+    local valueLabel = Instance.new("TextLabel", statFrame)
+    valueLabel.Text = "💰 Value: $0"
+    valueLabel.Size = UDim2.new(0.33, 0, 1, 0)
+    valueLabel.Position = UDim2.new(0.33, 0, 0, 0)
+    valueLabel.BackgroundTransparency = 1
+    valueLabel.TextColor3 = Color3.fromRGB(255, 221, 0)
+    valueLabel.Font = Enum.Font.GothamBold
+    valueLabel.TextSize = 16
+    
+    local timeLabel = Instance.new("TextLabel", statFrame)
+    timeLabel.Text = "⏱️ Session: 0s"
+    timeLabel.Size = UDim2.new(0.34, 0, 1, 0)
+    timeLabel.Position = UDim2.new(0.66, 0, 0, 0)
+    timeLabel.BackgroundTransparency = 1
+    timeLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
+    timeLabel.Font = Enum.Font.GothamBold
+    timeLabel.TextSize = 16
+    
+    local statusBar = Instance.new("Frame", dashPage)
+    statusBar.Size = UDim2.new(1, 0, 0, 60)
+    statusBar.Position = UDim2.new(0, 0, 0, 140)
+    statusBar.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    Instance.new("UICorner", statusBar).CornerRadius = UDim.new(0, 10)
+    
+    local statusText = Instance.new("TextLabel", statusBar)
+    statusText.Text = "⚪ Idle - Waiting for eggs..."
+    statusText.Size = UDim2.new(1, -20, 1, 0)
+    statusText.Position = UDim2.new(0, 10, 0, 0)
+    statusText.BackgroundTransparency = 1
+    statusText.TextColor3 = Color3.fromRGB(180, 180, 180)
+    statusText.Font = Enum.Font.Gotham
+    statusText.TextSize = 14
+    statusText.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Eggs page
+    local eggsPage = createPage("Eggs")
+    local eggsTitle = Instance.new("TextLabel", eggsPage)
+    eggsTitle.Text = "🥚 Egg ESP & Auto Steal"
+    eggsTitle.Size = UDim2.new(1, 0, 0, 35)
+    eggsTitle.BackgroundTransparency = 1
+    eggsTitle.TextColor3 = Color3.new(1, 1, 1)
+    eggsTitle.Font = Enum.Font.GothamBold
+    eggsTitle.TextSize = 20
+    eggsTitle.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local function createToggle(parent, text, default, yPos, callback)
+        local frame = Instance.new("Frame", parent)
+        frame.Size = UDim2.new(1, 0, 0, 40)
+        frame.Position = UDim2.new(0, 0, 0, yPos)
+        frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+        Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+        
+        local label = Instance.new("TextLabel", frame)
+        label.Text = text
+        label.Size = UDim2.new(1, -80, 1, 0)
+        label.Position = UDim2.new(0, 15, 0, 0)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = Color3.fromRGB(220, 220, 220)
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 14
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        
+        local btn = Instance.new("TextButton", frame)
+        btn.Size = UDim2.new(0, 50, 0, 24)
+        btn.Position = UDim2.new(1, -65, 0, 8)
+        btn.Text = default and "ON" or "OFF"
+        btn.BackgroundColor3 = default and Color3.fromRGB(76, 175, 80) or Color3.fromRGB(80, 80, 80)
+        btn.TextColor3 = Color3.new(1, 1, 1)
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 12
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+        
+        local state = default
+        btn.MouseButton1Click:Connect(function()
+            state = not state
+            btn.Text = state and "ON" or "OFF"
+            btn.BackgroundColor3 = state and Color3.fromRGB(76, 175, 80) or Color3.fromRGB(80, 80, 80)
+            if callback then callback(state) end
+        end)
+        return state
+    end
+    
+    createToggle(eggsPage, "🎯 Egg ESP", Config.ESPEnabled, 45, function(v) Config.ESPEnabled = v end)
+    createToggle(eggsPage, "📏 Show Distance", Config.ESPShowDistance, 90, function(v) Config.ESPShowDistance = v end)
+    createToggle(eggsPage, "💰 Show Value", Config.ESPShowValue, 135, function(v) Config.ESPShowValue = v end)
+    createToggle(eggsPage, "📦 Show Size", Config.ESPShowSize, 180, function(v) Config.ESPShowSize = v end)
+    createToggle(eggsPage, "🧬 Show Mutation", Config.ESPShowMutation, 225, function(v) Config.ESPShowMutation = v end)
+    createToggle(eggsPage, "🏷️ Show Rarity", Config.ESPShowRarity, 270, function(v) Config.ESPShowRarity = v end)
+    createToggle(eggsPage, "🤖 Auto Steal", Config.AutoSteal, 315, function(v) Config.AutoSteal = v end)
+    
+    -- Filters page
+    local filtersPage = createPage("Filters")
+    local filtersTitle = Instance.new("TextLabel", filtersPage)
+    filtersTitle.Text = "⚙️ Filters"
+    filtersTitle.Size = UDim2.new(1, 0, 0, 35)
+    filtersTitle.BackgroundTransparency = 1
+    filtersTitle.TextColor3 = Color3.new(1, 1, 1)
+    filtersTitle.Font = Enum.Font.GothamBold
+    filtersTitle.TextSize = 20
+    filtersTitle.TextXAlignment = Enum.TextXAlignment.Left
+    
+    -- Min Value
+    local mvFrame = Instance.new("Frame", filtersPage)
+    mvFrame.Size = UDim2.new(1, 0, 0, 45)
+    mvFrame.Position = UDim2.new(0, 0, 0, 45)
+    mvFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    Instance.new("UICorner", mvFrame).CornerRadius = UDim.new(0, 8)
+    
+    local mvLabel = Instance.new("TextLabel", mvFrame)
+    mvLabel.Text = "💰 Min Value:"
+    mvLabel.Size = UDim2.new(0.4, 0, 1, 0)
+    mvLabel.Position = UDim2.new(0, 15, 0, 0)
+    mvLabel.BackgroundTransparency = 1
+    mvLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+    mvLabel.Font = Enum.Font.Gotham
+    mvLabel.TextSize = 14
+    mvLabel.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local mvInput = Instance.new("TextBox", mvFrame)
+    mvInput.Text = tostring(Config.MinValue)
+    mvInput.Size = UDim2.new(0.5, 0, 0, 30)
+    mvInput.Position = UDim2.new(0.45, 0, 0, 7)
+    mvInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    mvInput.TextColor3 = Color3.new(1, 1, 1)
+    mvInput.Font = Enum.Font.Gotham
+    mvInput.TextSize = 14
+    mvInput.ClearTextOnFocus = false
+    Instance.new("UICorner", mvInput).CornerRadius = UDim.new(0, 6)
+    mvInput.FocusLost:Connect(function() Config.MinValue = tonumber(mvInput.Text) or Config.MinValue end)
+    
+    -- Min Size
+    local msFrame = Instance.new("Frame", filtersPage)
+    msFrame.Size = UDim2.new(1, 0, 0, 45)
+    msFrame.Position = UDim2.new(0, 0, 0, 100)
+    msFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    Instance.new("UICorner", msFrame).CornerRadius = UDim.new(0, 8)
+    
+    local msLabel = Instance.new("TextLabel", msFrame)
+    msLabel.Text = "📦 Min Size:"
+    msLabel.Size = UDim2.new(0.4, 0, 1, 0)
+    msLabel.Position = UDim2.new(0, 15, 0, 0)
+    msLabel.BackgroundTransparency = 1
+    msLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+    msLabel.Font = Enum.Font.Gotham
+    msLabel.TextSize = 14
+    msLabel.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local msInput = Instance.new("TextBox", msFrame)
+    msInput.Text = tostring(Config.MinSize)
+    msInput.Size = UDim2.new(0.5, 0, 0, 30)
+    msInput.Position = UDim2.new(0.45, 0, 0, 7)
+    msInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    msInput.TextColor3 = Color3.new(1, 1, 1)
+    msInput.Font = Enum.Font.Gotham
+    msInput.TextSize = 14
+    msInput.ClearTextOnFocus = false
+    Instance.new("UICorner", msInput).CornerRadius = UDim.new(0, 6)
+    msInput.FocusLost:Connect(function() Config.MinSize = tonumber(msInput.Text) or Config.MinSize end)
+    
+    -- Target rarity display
+    local rarityInfo = Instance.new("TextLabel", filtersPage)
+    rarityInfo.Text = "🎯 Target: " .. table.concat(Config.TargetRarity, ", ")
+    rarityInfo.Size = UDim2.new(1, 0, 0, 40)
+    rarityInfo.Position = UDim2.new(0, 0, 0, 155)
+    rarityInfo.BackgroundTransparency = 1
+    rarityInfo.TextColor3 = Color3.fromRGB(255, 221, 0)
+    rarityInfo.Font = Enum.Font.Gotham
+    rarityInfo.TextSize = 13
+    rarityInfo.TextXAlignment = Enum.TextXAlignment.Left
+    rarityInfo.TextWrapped = true
+    
+    -- ============ RARITY PAGE ============
+    local rarityPage = createPage("Rarity")
+    local rarityTitle = Instance.new("TextLabel", rarityPage)
+    rarityTitle.Text = "📚 Rarity Database (Forest → Demons & Angels)"
+    rarityTitle.Size = UDim2.new(1, 0, 0, 35)
+    rarityTitle.BackgroundTransparency = 1
+    rarityTitle.TextColor3 = Color3.new(1, 1, 1)
+    rarityTitle.Font = Enum.Font.GothamBold
+    rarityTitle.TextSize = 18
+    rarityTitle.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local rarityScroll = Instance.new("ScrollingFrame", rarityPage)
+    rarityScroll.Size = UDim2.new(1, 0, 1, -45)
+    rarityScroll.Position = UDim2.new(0, 0, 0, 45)
+    rarityScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    rarityScroll.BorderSizePixel = 0
+    rarityScroll.ScrollBarThickness = 6
+    rarityScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    Instance.new("UICorner", rarityScroll).CornerRadius = UDim.new(0, 8)
+    
+    local yOffset = 10
+    local function addRarityEntry(biome, rarity, pets)
+        local frame = Instance.new("Frame", rarityScroll)
+        frame.Size = UDim2.new(1, -20, 0, 35)
+        frame.Position = UDim2.new(0, 10, 0, yOffset)
+        frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
+        
+        local label = Instance.new("TextLabel", frame)
+        label.Text = string.format("[%s] %s: %s", biome, rarity, table.concat(pets, ", "))
+        label.Size = UDim2.new(1, -20, 1, 0)
+        label.Position = UDim2.new(0, 10, 0, 0)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = Color3.fromRGB(220, 220, 220)
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 12
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        
+        yOffset = yOffset + 40
+        rarityScroll.CanvasSize = UDim2.new(0, 0, 0, yOffset + 10)
+    end
+    
+    -- Populate rarity page
+    for biome, rarities in pairs(RARITY_DB) do
+        if biome == "DemonsAngels" then
+            for side, sides in pairs(rarities) do
+                for rarity, pets in pairs(sides) do
+                    addRarityEntry("DemonsAngels-" .. side, rarity, pets)
+                end
+            end
+        else
+            for rarity, pets in pairs(rarities) do
+                addRarityEntry(biome, rarity, pets)
+            end
+        end
+    end
+    
+    -- Webhook page
+    local webhookPage = createPage("Webhook")
+    local whTitle = Instance.new("TextLabel", webhookPage)
+    whTitle.Text = "🔔 Discord Alerts"
+    whTitle.Size = UDim2.new(1, 0, 0, 35)
+    whTitle.BackgroundTransparency = 1
+    whTitle.TextColor3 = Color3.new(1, 1, 1)
+    whTitle.Font = Enum.Font.GothamBold
+    whTitle.TextSize = 20
+    whTitle.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local whFrame = Instance.new("Frame", webhookPage)
+    whFrame.Size = UDim2.new(1, 0, 0, 80)
+    whFrame.Position = UDim2.new(0, 0, 0, 45)
+    whFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    Instance.new("UICorner", whFrame).CornerRadius = UDim.new(0, 8)
+    
+    local whLabel = Instance.new("TextLabel", whFrame)
+    whLabel.Text = "🔗 Webhook URL:"
+    whLabel.Size = UDim2.new(1, -30, 0, 25)
+    whLabel.Position = UDim2.new(0, 15, 0, 5)
+    whLabel.BackgroundTransparency = 1
+    whLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+    whLabel.Font = Enum.Font.Gotham
+    whLabel.TextSize = 13
+    whLabel.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local whInput = Instance.new("TextBox", whFrame)
+    whInput.Text = Config.WebhookURL
+    whInput.PlaceholderText = "https://discord.com/api/webhooks/..."
+    whInput.Size = UDim2.new(1, -30, 0, 30)
+    whInput.Position = UDim2.new(0, 15, 0, 35)
+    whInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    whInput.TextColor3 = Color3.new(1, 1, 1)
+    whInput.Font = Enum.Font.Gotham
+    whInput.TextSize = 12
+    whInput.ClearTextOnFocus = false
+    Instance.new("UICorner", whInput).CornerRadius = UDim.new(0, 6)
+    whInput.FocusLost:Connect(function() Config.WebhookURL = whInput.Text end)
+    
+    createToggle(webhookPage, "🔔 Enable Discord Alerts", Config.WebhookEnabled, 135, function(v) Config.WebhookEnabled = v end)
+    
+    -- About page
+    local aboutPage = createPage("About")
+    local aboutText = Instance.new("TextLabel", aboutPage)
+    aboutText.Text = "ZAINL HUB v2.1\n\nGitHub: aoke5283-art/ZainlHub\n\nFeatures:\n• Egg ESP (Rarity, Mutation, Value, Size, Distance)\n• Auto Steal Selected by filter\n• Rarity Database (Forest → Demons & Angels)\n• Min Value / Min Size threshold\n• Discord Alerts via webhook\n• Session statistics\n\n© ZAINL V1 - Unlimited Access"
+    aboutText.Size = UDim2.new(1, 0, 1, 0)
+    aboutText.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    aboutText.TextColor3 = Color3.fromRGB(180, 180, 180)
+    aboutText.Font = Enum.Font.Gotham
+    aboutText.TextSize = 14
+    aboutText.TextXAlignment = Enum.TextXAlignment.Left
+    aboutText.TextYAlignment = Enum.TextYAlignment.Top
+    aboutText.TextWrapped = true
+    Instance.new("UICorner", aboutText).CornerRadius = UDim.new(0, 8)
+    Instance.new("UIPadding", aboutText).PaddingTop = UDim.new(0, 15)
+    Instance.new("UIPadding", aboutText).PaddingLeft = UDim.new(0, 15)
+    
+    -- Sidebar buttons
+    local sidebarBtns = {}
+    for i, name in ipairs(menus) do
+        local btn = Instance.new("TextButton", sidebar)
+        btn.Size = UDim2.new(1, -10, 0, 42)
+        btn.Position = UDim2.new(0, 5, 0, 10 + (i - 1) * 47)
+        btn.Text = "  " .. name
+        btn.Font = Enum.Font.Gotham
+        btn.TextSize = 14
+        btn.TextXAlignment = Enum.TextXAlignment.Left
+        btn.BackgroundColor3 = (name == activePage) and Color3.fromRGB(255, 80, 150) or Color3.fromRGB(30, 30, 30)
+        btn.TextColor3 = Color3.new(1, 1, 1)
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+        sidebarBtns[name] = btn
+        
+        btn.MouseButton1Click:Connect(function()
+            for _, b in pairs(sidebarBtns) do
+                b.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+            end
+            btn.BackgroundColor3 = Color3.fromRGB(255, 80, 150)
+            for n, page in pairs(pages) do
+                page.Visible = (n == name)
+            end
+            activePage = name
+        end)
+    end
+
+    -- ============================================================
+    -- LOGIC: FILTER CHECK (pake RARITY_DB)
+    -- ============================================================
+    local function isTarget(egg)
+        if not egg:IsA("BasePart") then return false end
+        
+        local eggName = egg.Name
+        local value = egg:GetAttribute("Value") or egg:GetAttribute("value") or 0
+        local size = egg:GetAttribute("Size") or egg:GetAttribute("size") or 0
+        local mutation = egg:GetAttribute("Mutation") or egg:GetAttribute("mutation") or "None"
+        
+        -- Cek Min Value & Size
+        if value < Config.MinValue then return false end
+        if size < Config.MinSize then return false end
+        
+        -- Cek Rarity dari database
+        local rarity, biome, side = getRarityFromPet(eggName)
+        if not rarity then return false end
+        
+        -- Cek apakah rarity termasuk target
+        local rarityMatch = false
+        for _, r in ipairs(Config.TargetRarity) do
+            if string.lower(rarity) == string.lower(r) then
+                rarityMatch = true
+                break
+            end
+        end
+        if not rarityMatch then return false end
+        
+        -- Cek mutation (kalo target mutation di-set)
+        if #Config.TargetMutation > 0 then
+            local mutMatch = false
+            for _, m in ipairs(Config.TargetMutation) do
+                if string.lower(mutation) == string.lower(m) then
+                    mutMatch = true
+                    break
+                end
+            end
+            if not mutMatch and string.lower(mutation) ~= "none" then
+                return false
+            end
+        end
+        
+        return true, rarity, biome, side
+    end
+    
+    -- ============================================================
+    -- LOGIC: ESP UPDATE
+    -- ============================================================
+    local function updateESP()
+        for _, egg in pairs(EggsFolder:GetChildren()) do
+            local oldESP = egg:FindFirstChild("ZainlESP")
+            if oldESP then oldESP:Destroy() end
+            
+            local isTargetEgg, rarity, biome, side = isTarget(egg)
+            if Config.ESPEnabled and isTargetEgg then
+                local mutation = egg:GetAttribute("Mutation") or "None"
+                local value = egg:GetAttribute("Value") or 0
+                local size = egg:GetAttribute("Size") or 0
+                
+                local distance = 0
+                if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                    distance = (plr.Character.HumanoidRootPart.Position - egg.Position).Magnitude
+                end
+                
+                local lines = {}
+                table.insert(lines, "🥚 " .. egg.Name)
+                if Config.ESPShowRarity then
+                    table.insert(lines, "Rarity: " .. rarity .. (side and (" (" .. side .. ")") or ""))
+                end
+                if Config.ESPShowMutation then
+                    table.insert(lines, "Mutation: " .. mutation)
+                end
+                if Config.ESPShowValue then
+                    table.insert(lines, "Value: $" .. tostring(value))
+                end
+                if Config.ESPShowSize then
+                    table.insert(lines, string.format("Size: %.1f KG", size))
+                end
+                if Config.ESPShowDistance then
+                    table.insert(lines, string.format("Distance: %.1f", distance))
+                end
+                if biome then
+                    table.insert(lines, "Biome: " .. biome)
+                end
+                
+                local bb = Instance.new("BillboardGui", egg)
+                bb.Name = "ZainlESP"
+                bb.Size = UDim2.new(0, 240, 0, 110)
+                bb.StudsOffset = Vector3.new(0, 4, 0)
+                bb.AlwaysOnTop = true
+                
+                local txt = Instance.new("TextLabel", bb)
+                txt.Size = UDim2.new(1, 0, 1, 0)
+                txt.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+                txt.BackgroundTransparency = 0.3
+                txt.TextColor3 = Color3.fromRGB(255, 221, 0)
+                txt.TextScaled = true
+                txt.Font = Enum.Font.GothamBold
+                txt.Text = table.concat(lines, "\n")
+                Instance.new("UICorner", txt).CornerRadius = UDim.new(0, 6)
+            end
+        end
+    end
+    
+    -- ============================================================
+    -- LOGIC: AUTO STEAL
+    -- ============================================================
+    local function autoSteal()
+        local bestEgg = nil
+        local bestScore = -1
+        
+        for _, egg in pairs(EggsFolder:GetChildren()) do
+            local isTargetEgg, rarity, biome, side = isTarget(egg)
+            if isTargetEgg then
+                local value = egg:GetAttribute("Value") or 0
+                local rarityIdx = getRarityIndex(rarity)
+                
+                local score = value
+                if Config.PrioritizeRarity then
+                    score = score + (rarityIdx * 100000)
+                end
+                if Config.PrioritizeSecret and string.lower(rarity) == "secret" then
+                    score = score + 5000000
+                end
+                
+                if score > bestScore then
+                    bestScore = score
+                    bestEgg = egg
+                end
+            end
+        end
+        
+        if bestEgg then
+            local stealRemote = RS:FindFirstChild("StealEgg") 
+                or RS:FindFirstChild("CollectEgg")
+                or RS:FindFirstChild("TakeEgg")
+                or RS:FindFirstChild("GrabEgg")
+            
+            if stealRemote and stealRemote:IsA("RemoteEvent") then
+                stealRemote:FireServer(bestEgg)
+                
+                local val = bestEgg:GetAttribute("Value") or 0
+                Config.TotalStolen = Config.TotalStolen + 1
+                Config.TotalValue = Config.TotalValue + val
+                
+                if Config.WebhookEnabled and Config.WebhookURL ~= "" and val >= Config.WebhookMinValue then
+                    ZainlHub:SendWebhook(bestEgg)
+                end
+                
+                return true
+            end
+        end
+        return false
+    end
+    
+    -- ============================================================
+    -- LOGIC: WEBHOOK
+    -- ============================================================
+    function ZainlHub:SendWebhook(egg)
+        if not Config.WebhookURL or Config.WebhookURL == "" then return end
+        
+        local rarity, biome, side = getRarityFromPet(egg.Name)
+        local mutation = egg:GetAttribute("Mutation") or "None"
+        local value = egg:GetAttribute("Value") or 0
+        local size = egg:GetAttribute("Size") or 0
+        
+        local embed = {
+            ["title"] = "🥚 ZAINL HUB - Rare Egg Stolen!",
+            ["description"] = "**" .. egg.Name .. "** has been stolen!",
+            ["color"] = 0xFF50A0,
+            ["fields"] = {
+                {["name"] = "Rarity", ["value"] = rarity .. (side and (" (" .. side .. ")") or ""), ["inline"] = true},
+                {["name"] = "Biome", ["value"] = biome or "Unknown", ["inline"] = true},
+                {["name"] = "Mutation", ["value"] = mutation, ["inline"] = true},
+                {["name"] = "Value", ["value"] = "$" .. tostring(value), ["inline"] = true},
+                {["name"] = "Size", ["value"] = string.format("%.1f KG", size), ["inline"] = true}
+            },
+            ["footer"] = {
+                ["text"] = "ZAINL HUB v2.1 | " .. os.date("%Y-%m-%d %H:%M:%S")
+            }
+        }
+        
+        local payload = {
+            ["content"] = "🎯 **ZAINL HUB ALERT**",
+            ["embeds"] = {embed}
+        }
+        
+        pcall(function()
+            HttpService:PostAsync(
+                Config.WebhookURL,
+                HttpService:JSONEncode(payload),
+                Enum.HttpContentType.ApplicationJson
+            )
+        end)
+    end
+    
+    -- ============================================================
+    -- MAIN LOOP
+    -- ============================================================
+    local lastSteal = 0
+    RunService.Heartbeat:Connect(function()
+        if Config.ESPEnabled then
+            updateESP()
+        end
+        
+        if Config.AutoSteal and tick() - lastSteal >= Config.AutoStealInterval then
+            lastSteal = tick()
+            autoSteal()
+        end
+        
+        stolenLabel.Text = "🥚 Stolen: " .. Config.TotalStolen
+        valueLabel.Text = "💰 Value: $" .. Config.TotalValue
+        local elapsed = os.time() - Config.SessionStart
+        timeLabel.Text = "⏱️ Session: " .. elapsed .. "s"
+        
+        if Config.AutoSteal then
+            statusText.Text = "🟢 Auto Steal Active - Scanning..."
+        elseif Config.ESPEnabled then
+            statusText.Text = "🔵 ESP Active - Displaying egg info"
+        else
+            statusText.Text = "⚪ Idle - Waiting for eggs..."
+        end
+    end)
+    
+    print("[ZAINL HUB] v2.1 Loaded - Rarity DB: Forest → Demons & Angels")
+end
+
+-- ============================================================
+-- AUTO RUN
+-- ============================================================
+ZainlHub:CreateUI()
+
+return ZainlHub
