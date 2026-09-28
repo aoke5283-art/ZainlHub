@@ -1,0 +1,49 @@
+-- ZAINL HUB v1.0 - OFFICIAL UI LIB (Map Pribadi)
+-- github: username lu / ZainlHub
+
+local ZainlHub = {}
+
+function ZainlHub:CreateUI()
+    local Players = game:GetService("Players")
+    local plr = Players.LocalPlayer
+    local gui = Instance.new("ScreenGui", plr.PlayerGui)
+    gui.Name = "ZainlHub"
+    
+    local main = Instance.new("Frame", gui)
+    main.Size = UDim2.new(0,850,0,480)
+    main.Position = UDim2.new(0.5,-425,0.5,-240)
+    main.BackgroundColor3 = Color3.fromRGB(15,15,15)
+    Instance.new("UICorner", main).CornerRadius = UDim.new(0,12)
+
+    -- Sidebar mirip foto
+    local sidebar = Instance.new("Frame", main)
+    sidebar.Size = UDim2.new(0,160,1,0)
+    sidebar.BackgroundColor3 = Color3.fromRGB(20,20,20)
+    
+    local menus = {"About","Dashboard","Eggs","Webhook","Shop","Pets","ESP","Misc","Upgrades"}
+    for i, name in pairs(menus) do
+        local btn = Instance.new("TextButton", sidebar)
+        btn.Size = UDim2.new(1,-10,0,42)
+        btn.Position = UDim2.new(0,5,0,10 + (i-1)*47)
+        btn.Text = "  "..name
+        btn.BackgroundColor3 = (name=="Eggs") and Color3.fromRGB(255,80,150) or Color3.fromRGB(30,30,30)
+        btn.TextColor3 = Color3.new(1,1,1)
+        Instance.new("UICorner", btn)
+    end
+
+    -- Content
+    local title = Instance.new("TextLabel", main)
+    title.Text = "  Z  ZAINL HUB"
+    title.Position = UDim2.new(0,15,0,5)
+    title.Size = UDim2.new(0,200,0,35)
+    title.TextColor3 = Color3.fromRGB(255,80,150)
+    title.BackgroundTransparency = 1
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 18
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    
+    print("ZAINL HUB Loaded from GitHub!")
+    return main
+end
+
+return ZainlHub
